@@ -81,7 +81,7 @@ static void ShowError(LPCWSTR text, LPCWSTR caption) {
     }
     SIZE_T textSize = lstrlenW(text);
     SIZE_T captionSize = lstrlenW(caption);
-    SIZE_T allocatedSize = textSize + captionSize + 3;
+    SIZE_T allocatedSize = textSize + captionSize + 5;
     LPWSTR message = (LPWSTR) HeapAlloc(heapHandle, 0, allocatedSize * sizeof(WCHAR));
     if (!message) {
         return;
@@ -89,8 +89,11 @@ static void ShowError(LPCWSTR text, LPCWSTR caption) {
     // Combine the caption and text into the message
     lstrcpyW(message, caption);
     lstrcpyW(message + captionSize + 2, text);
-    message[captionSize] = 0x3A;     // Add a colon
-    message[captionSize + 1] = 0x20; // Add a space
+    message[captionSize] = 0x3A;       // Add a colon
+    message[captionSize + 1] = 0x20;   // Add a space
+    message[allocatedSize - 3] = 0x0D; // Add a CR
+    message[allocatedSize - 2] = 0x0A; // Add a LF
+    message[allocatedSize - 1] = 0x00; // Add a zero
     // Output the message to the console
     HANDLE console = GetStdHandle(STD_ERROR_HANDLE);
     if (console == INVALID_HANDLE_VALUE) {
