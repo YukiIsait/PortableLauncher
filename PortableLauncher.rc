@@ -1,5 +1,7 @@
 ﻿#include <Windows.h>
 
+1 RT_MANIFEST "Manifest.xml"
+
 #ifdef _CONSOLE
 1 ICON DISCARDABLE "IconConsole.ico"
 #else

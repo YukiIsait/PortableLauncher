@@ -2,21 +2,17 @@
 #include <Shlwapi.h>
 
 static BOOL SetAppDataToCurrentDirectory() {
-    // Get the current module path
     WCHAR path[MAX_PATH];
     DWORD size = GetModuleFileNameW(NULL, path, MAX_PATH);
     if (size == 0 || size == MAX_PATH) {
         return FALSE;
     }
-    // Remove the filename
     if (PathRemoveFileSpecW(path) == 0) {
         return FALSE;
     }
-    // Set the APPDATA environment variable
     if (SetEnvironmentVariableW(L"APPDATA", path) == 0) {
         return FALSE;
     }
-    // Set the LOCALAPPDATA environment variable
     if (SetEnvironmentVariableW(L"LOCALAPPDATA", path) == 0) {
         return FALSE;
     }
@@ -24,7 +20,6 @@ static BOOL SetAppDataToCurrentDirectory() {
 }
 
 static BOOL LaunchProcess(LPCWSTR args) {
-    // Get the current module path
     WCHAR path[MAX_PATH];
     DWORD size = GetModuleFileNameW(NULL, path, MAX_PATH);
     if (size == 0 || size == MAX_PATH) {
@@ -71,11 +66,41 @@ static BOOL LaunchProcess(LPCWSTR args) {
     // If a console program is launched, wait for it to exit
     WaitForSingleObject(pi.hProcess, INFINITE);
 #endif
-    // Cleanup
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
     HeapFree(heapHandle, 0, commandLine);
     return TRUE;
+}
+
+static void ShowError(LPCWSTR text, LPCWSTR caption) {
+#ifdef _CONSOLE
+    // Allocate memory for the message
+    HANDLE heapHandle = GetProcessHeap();
+    if (!heapHandle) {
+        return;
+    }
+    SIZE_T textSize = lstrlenW(text);
+    SIZE_T captionSize = lstrlenW(caption);
+    SIZE_T allocatedSize = textSize + captionSize + 3;
+    LPWSTR message = (LPWSTR) HeapAlloc(heapHandle, 0, allocatedSize * sizeof(WCHAR));
+    if (!message) {
+        return;
+    }
+    // Combine the caption and text into the message
+    lstrcpyW(message, caption);
+    lstrcpyW(message + captionSize + 2, text);
+    message[captionSize] = 0x3A;     // Add a colon
+    message[captionSize + 1] = 0x20; // Add a space
+    // Output the message to the console
+    HANDLE console = GetStdHandle(STD_ERROR_HANDLE);
+    if (console == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    WriteConsoleW(console, message, (DWORD) (allocatedSize - 1), NULL, NULL);
+    HeapFree(heapHandle, 0, message);
+#else
+    MessageBoxW(NULL, text, caption, MB_ICONERROR);
+#endif
 }
 
 static INT Main(INT argumentCount, LPWSTR* argumentVector) {
@@ -90,34 +115,31 @@ static INT Main(INT argumentCount, LPWSTR* argumentVector) {
             args = argumentVector[1];
             break;
         default:
+            ShowError(L"Too many arguments provided to the program.", L"Argument Error");
             return 1;
     }
-    // Set the AppData and LocalAppData location
     if (!SetAppDataToCurrentDirectory()) {
+        ShowError(L"Failed to set the current directory as AppData or LocalAppData.", L"Environment Variable Error");
         return 1;
     }
-    // Launch the process
     if (!LaunchProcess(args)) {
+        ShowError(L"Failed to launch the process.", L"Process Launch Error");
         return 1;
     }
     return 0;
 }
 
 DWORD EntryPoint() {
-    // Get command line arguments
     LPWSTR commandLine = GetCommandLineW();
     if (!*commandLine) {
         return Main(0, &commandLine);
     }
-    // Split arguments into an array
     INT argumentCount;
     LPWSTR* argumentVector = CommandLineToArgvW(commandLine, &argumentCount);
     if (!argumentCount) {
         return Main(0, &commandLine);
     }
-    // Call the main function
     INT exitCode = Main(argumentCount, argumentVector);
-    // Cleanup
     LocalFree(argumentVector);
     return exitCode;
 }
