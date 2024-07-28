@@ -1,25 +1,34 @@
 ﻿#include <Windows.h>
 #include <Shlwapi.h>
 
-static BOOL SetAppDataToCurrentDirectory() {
+static BOOL SetDataDirectoryToCurrent(LPCWSTR* directoryNames, DWORD directoryNameSize) {
     WCHAR path[MAX_PATH];
     DWORD size = GetModuleFileNameW(NULL, path, MAX_PATH);
     if (size == 0 || size == MAX_PATH) {
         return FALSE;
     }
-    if (PathRemoveFileSpecW(path) == 0) {
+    PWSTR directory = PathFindFileNameW(path);
+    if (directory == path) {
         return FALSE;
     }
-    if (SetEnvironmentVariableW(L"APPDATA", path) == 0) {
-        return FALSE;
-    }
-    if (SetEnvironmentVariableW(L"LOCALAPPDATA", path) == 0) {
-        return FALSE;
+    SIZE_T remainingSize = MAX_PATH - (((SIZE_T) directory - (SIZE_T) path) / sizeof(WCHAR));
+    while (directoryNameSize--) {
+        LPCWSTR directoryName = directoryNames[directoryNameSize];
+        if (lstrlenW(directoryName) >= remainingSize) { // Ensure sufficient space
+            return FALSE;
+        }
+        lstrcpyW(directory, directoryName);
+        if (!CreateDirectoryW(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+            return FALSE;
+        }
+        if (!SetEnvironmentVariableW(directoryName, path)) {
+            return FALSE;
+        }
     }
     return TRUE;
 }
 
-static BOOL LaunchProcess(LPCWSTR args) {
+static BOOL LaunchProcess(LPCWSTR arguments, LPCWSTR* directoryNames, DWORD directoryNameSize) {
     WCHAR path[MAX_PATH];
     DWORD size = GetModuleFileNameW(NULL, path, MAX_PATH);
     if (size == 0 || size == MAX_PATH) {
@@ -32,15 +41,15 @@ static BOOL LaunchProcess(LPCWSTR args) {
     if (lstrcmpiW(extension, L"launcher") != 0) {
         return FALSE;
     }
+    if (!SetDataDirectoryToCurrent(directoryNames, directoryNameSize)) {
+        return FALSE;
+    }
     // Replace LAUNCHER with the EXE extension
     lstrcpyW(extension, L"exe");
     // Allocate memory for the command line
     HANDLE heapHandle = GetProcessHeap();
-    if (!heapHandle) {
-        return FALSE;
-    }
     SIZE_T pathSize = lstrlenW(path);
-    SIZE_T argsSize = lstrlenW(args);
+    SIZE_T argsSize = lstrlenW(arguments);
     SIZE_T allocatedSize = pathSize + argsSize + 1;
     if (argsSize) {
         allocatedSize++;
@@ -52,7 +61,7 @@ static BOOL LaunchProcess(LPCWSTR args) {
     // Combine the application name and command line
     lstrcpyW(commandLine, path);
     if (argsSize) {
-        lstrcpyW(commandLine + pathSize + 1, args);
+        lstrcpyW(commandLine + pathSize + 1, arguments);
         commandLine[pathSize] = 0x20; // Add a space
     }
     // Create the process
@@ -76,9 +85,6 @@ static void ShowError(LPCWSTR text, LPCWSTR caption) {
 #ifdef _CONSOLE
     // Allocate memory for the message
     HANDLE heapHandle = GetProcessHeap();
-    if (!heapHandle) {
-        return;
-    }
     SIZE_T textSize = lstrlenW(text);
     SIZE_T captionSize = lstrlenW(caption);
     SIZE_T allocatedSize = textSize + captionSize + 5;
@@ -108,24 +114,21 @@ static void ShowError(LPCWSTR text, LPCWSTR caption) {
 
 static INT Main(INT argumentCount, LPWSTR* argumentVector) {
     // Use the first argument as the command line
-    LPCWSTR args;
+    LPCWSTR arguments;
     switch (argumentCount) {
         case 0:
         case 1:
-            args = NULL;
+            arguments = NULL;
             break;
         case 2:
-            args = argumentVector[1];
+            arguments = argumentVector[1];
             break;
         default:
             ShowError(L"Too many arguments provided to the program.", L"Argument Error");
             return 1;
     }
-    if (!SetAppDataToCurrentDirectory()) {
-        ShowError(L"Failed to set the current directory as AppData or LocalAppData.", L"Environment Variable Error");
-        return 1;
-    }
-    if (!LaunchProcess(args)) {
+    LPCWSTR directorys[] = { L"AppData", L"LocalAppData", L"UserProfile" };
+    if (!LaunchProcess(arguments, directorys, sizeof(directorys) / sizeof(LPCWSTR))) {
         ShowError(L"Failed to launch the process.", L"Process Launch Error");
         return 1;
     }
