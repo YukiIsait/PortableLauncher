@@ -8,9 +8,11 @@ The Portable Launcher is designed to set the `AppData`, `LocalAppData` and `User
     - Window launcher for GUI applications
     - Console launcher for command-line tools
 
-2. Rename the launcher to `<TargetApplicationName>.launcher.exe`, where `<TargetApplicationName>` is the name of the application you wish to launch.
+2. Place the launcher in the same directory as the target program.
 
-3. Execute the launcher to start your application with the new environment settings.
+3. Rename the launcher to `<TargetApplicationName>.launcher.exe`, where `<TargetApplicationName>` is the name of the application you wish to launch.
+
+4. Execute the launcher to start your application with the new environment settings.
 
 ## License
 
